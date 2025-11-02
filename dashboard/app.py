@@ -1,4 +1,5 @@
-# solar_dashboard.py
+# app.py (in dashboard/)
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,6 +8,7 @@ import calendar
 from datetime import datetime, timedelta
 import plotly.express as px
 import requests
+from pathlib import Path
 
 st.set_page_config(page_title="Solar Dashboard", layout="wide")
 st.title("Solar Dashboard")
@@ -15,9 +17,12 @@ st.title("Solar Dashboard")
 # 1. Load CSV data
 # -----------------------
 @st.cache_data
-def load_data(csv_file="solar_data.csv"):
-    df = pd.read_csv(csv_file, parse_dates=['date'])
+def load_data():
+    BASE_DIR = Path(__file__).parent
+    CSV_PATH = BASE_DIR.parent / "data" / "solar_data.csv"
+    df = pd.read_csv(CSV_PATH, parse_dates=['date'])
     df = df.rename(columns={'Cumulative_kWh':'kwh'})
+    df = df.drop_duplicates(subset='date', keep='last')
     df = df.set_index('date').sort_index()
     return df
 
@@ -60,16 +65,11 @@ meter_reading = st.number_input("Meter Reading (kWh, cumulative)", value=float(d
 
 if st.button("Save Today's Reading"):
     today = pd.to_datetime("today").normalize()
-    new_row = pd.DataFrame({'kwh':[meter_reading]})
-    if yesterday in data.index:
-        prev_reading_for_today = data['kwh'].iloc[-1]
-    else:
-        prev_reading_for_today = meter_reading
-    new_row['daily_kwh'] = max(meter_reading - prev_reading_for_today, 0)
-    new_row.index = [today]
-    if today in data.index:
-        data.loc[today] = new_row.loc[today]
-    else:
+    prev_reading_for_today = data['kwh'].iloc[-1] if len(data)>0 else meter_reading
+    daily_gen = max(meter_reading - prev_reading_for_today, 0)
+    new_row = pd.DataFrame({'kwh':[meter_reading], 'daily_kwh':[daily_gen]}, index=[today])
+    data.update(new_row)
+    if today not in data.index:
         data = pd.concat([data, new_row])
     st.success("Today's meter reading saved!")
 
@@ -80,7 +80,7 @@ st.subheader("Today's Weather")
 today_str = pd.to_datetime("today").strftime("%A, %d %B %Y")
 st.write(f"**Date:** {today_str}")
 
-VC_API_KEY = "Q53AVJQ9AAU3A9YEMGJXNU5NW"  # Replace with your key
+VC_API_KEY = "YOUR_VISUALCROSSING_KEY"  # Replace with your key
 POSTCODE = "CO5 8TA,UK"
 URL = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{POSTCODE}/today?unitGroup=metric&key={VC_API_KEY}&include=current"
 
