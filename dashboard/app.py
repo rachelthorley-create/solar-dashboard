@@ -55,31 +55,46 @@ if st.button("Save Today's Reading"):
 # 2. Weather Info (Live API)
 # -----------------------
 st.subheader("Current Weather")
-API_KEY = "YOUR_API_KEY"  # Replace with your OpenWeatherMap API key
-CITY = "London"
-URL = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}&units=metric"
+VC_API_KEY = "Q53AVJQ9AAU3A9YEMGJXNU5NW"
+POSTCODE = "CO5 8TA,UK"  # include country code
+URL = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{POSTCODE}/today?unitGroup=metric&key={VC_API_KEY}&include=current"
 
 try:
     response = requests.get(URL)
+    response.raise_for_status()
     weather = response.json()
-    temp = weather['main']['temp']
-    wind = weather['wind']['speed']
-    condition = weather['weather'][0]['main']
-    icon_code = weather['weather'][0]['icon']
-    icon_url = f"http://openweathermap.org/img/wn/{icon_code}@2x.png"
+
+    current = weather['currentConditions']
+    temp = current['temp']
+    wind = current['windspeed']
+    conditions = current['conditions']
+
+    # Map conditions to emojis
+    condition_icon_map = {
+        "Clear": "☀️",
+        "Partially cloudy": "⛅",
+        "Cloudy": "☁️",
+        "Rain": "🌧️",
+        "Snow": "❄️",
+        "Fog": "🌫️"
+    }
+    icon = condition_icon_map.get(conditions, "🌡️")
 
     col1, col2 = st.columns([1,2])
     with col1:
-        st.image(icon_url, width=80)
+        st.write(icon)
     with col2:
-        st.write(f"**Condition:** {condition}")
+        st.write(f"**Condition:** {conditions}")
         st.write(f"**Temperature:** {temp} °C")
         st.write(f"**Wind speed:** {wind} m/s")
-except:
+
+except Exception as e:
     st.write("Unable to fetch live weather data. Showing placeholder values.")
+    st.write(f"Error: {e}")
     st.write("☀️ Temperature: 21°C")
     st.write("Sunlight hours: 6")
     st.write("Wind Speed: 3 m/s")
+
 
 # -----------------------
 # 3. Last 7 Days Data Table + Info Panel + Bar Chart
