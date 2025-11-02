@@ -24,7 +24,7 @@ if start_date > end_date:
 # Example dataset (replace with real data)
 # -----------------------
 dates = pd.date_range(start=start_date, end=end_date, freq='D')
-values = np.random.randint(0, 100, len(dates))  # Replace with real kWh readings
+values = np.random.randint(0, 100, len(dates))  # Replace with actual kWh readings
 
 data = pd.DataFrame({'date': dates, 'kwh': values})
 data.set_index('date', inplace=True)
@@ -82,29 +82,30 @@ st.sidebar.subheader("Compare Past Years")
 years_available = [2024, 2023, 2022]
 selected_years = st.sidebar.multiselect("Include past years:", years_available)
 
-# Prepare dataframe for Plotly
+# Build line chart data
 line_data = pd.DataFrame()
 for y in [current_year] + selected_years:
     month_data = data[(data.index.year==y) & (data.index.month==current_month)]
     line_data[f'{y}'] = month_data['kwh'].rolling(window=3).mean()
-line_data['date'] = month_data.index  # same index for x-axis
+line_data['date'] = month_data.index
 line_data_melt = line_data.reset_index(drop=True).melt(id_vars='date', var_name='Year', value_name='kWh')
 
-fig = px.line(line_data_melt, x='date', y='kWh', color='Year',
+fig1 = px.line(line_data_melt, x='date', y='KWh', color='Year',
               labels={'KWh':'kWh', 'date':'Date'},
               title=f"Rolling Average Solar Generation for Month {current_month}")
-fig.update_xaxes(tickformat='%d-%b')
-st.plotly_chart(fig, use_container_width=True)
+fig1.update_xaxes(tickformat='%d-%b')
+st.plotly_chart(fig1, use_container_width=True)
 
 # -----------------------
 # Monthly Total Generation - Grouped Bar Chart
 # -----------------------
 st.subheader("Monthly Total Generation (Grouped by Year)")
-monthly_totals = data.groupby([data.index.year, data.index.month])['kwh'].sum().reset_index()
-monthly_totals['month_str'] = monthly_totals['date'].dt.month.apply(lambda x: calendar.month_abbr[x])
+monthly_totals = data.assign(year=data.index.year, month=data.index.month)
+monthly_totals = monthly_totals.groupby(['year','month'])['kwh'].sum().reset_index()
+monthly_totals['month_str'] = monthly_totals['month'].apply(lambda x: calendar.month_abbr[x])
 
-fig2 = px.bar(monthly_totals, x='month', y='kwh', color='year', barmode='group',
-              labels={'kwh':'Total kWh', 'month':'Month', 'year':'Year'},
+fig2 = px.bar(monthly_totals, x='month_str', y='kwh', color='year', barmode='group',
+              labels={'kwh':'Total kWh', 'month_str':'Month', 'year':'Year'},
               text='kwh')
 st.plotly_chart(fig2, use_container_width=True)
 
