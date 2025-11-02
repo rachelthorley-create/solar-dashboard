@@ -4,7 +4,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import calendar
-from datetime import datetime, timedelta
+from datetime import datetime
+from PIL import Image
 
 st.set_page_config(page_title="Solar Dashboard", layout="wide")
 st.title("Solar Dashboard")
@@ -92,22 +93,36 @@ st.line_chart(line_data)
 # -----------------------
 # Data Input Section
 # -----------------------
-st.subheader("Today's Data Input")
-col1, col2 = st.columns(2)
+st.subheader("Today's Data")
 
+col1, col2 = st.columns([1,2])
+
+# Column 1: Weather info
 with col1:
-    temperature = st.number_input("Temperature (°C)", value=20.0)
-    sunlight = st.number_input("Sunlight (hours)", value=5.0)
-    wind_speed = st.number_input("Wind Speed (m/s)", value=3.0)
+    st.markdown("**Weather Stats (from API)**")
+    # Example: replace these with actual API fetch later
+    weather_icon = "☀️"  # could vary by API condition
+    temperature = 21
+    sunlight_hours = 6
+    wind_speed = 3
+    
+    st.write(f"{weather_icon} Temperature: {temperature}°C")
+    st.write(f"Sunlight hours: {sunlight_hours}")
+    st.write(f"Wind Speed: {wind_speed} m/s")
 
+# Column 2: Meter reading input
 with col2:
-    kwh_today = st.number_input("Cumulative kWh today", value=0.0)
-
-if st.button("Save Today's Data"):
-    today = pd.to_datetime("today").normalize()
-    new_row = pd.DataFrame({'kwh': [kwh_today]}, index=[today])
-    data = pd.concat([data, new_row])
-    st.success("Today's data added!")
+    meter_reading = st.number_input("Meter Reading (kWh, cumulative)", value=0.0, step=0.1)
+    if st.button("Save Today's Reading"):
+        today = pd.to_datetime("today").normalize()
+        new_row = pd.DataFrame({'kwh': [meter_reading]}, index=[today])
+        # Update or append today's row
+        if today in data.index:
+            data.loc[today, 'kwh'] = meter_reading
+        else:
+            data = pd.concat([data, new_row])
+        st.success("Today's meter reading saved!")
 
 st.write("Preview of dataset:")
 st.dataframe(data.tail(10))
+
