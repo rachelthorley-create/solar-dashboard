@@ -17,7 +17,6 @@ st.title("Solar Dashboard")
 st.sidebar.header("Settings")
 start_date = st.sidebar.date_input("Start Date", datetime(2025, 1, 1))
 end_date = st.sidebar.date_input("End Date", datetime(2025, 12, 31))
-
 if start_date > end_date:
     st.sidebar.error("Start date must be before end date")
 
@@ -25,9 +24,13 @@ if start_date > end_date:
 # Example dataset
 # -----------------------
 dates = pd.date_range(start=start_date, end=end_date, freq='D')
-values = np.random.randint(0, 100, len(dates))  # Replace with actual kWh readings
+values = np.random.randint(0, 100, len(dates))  # Replace with real kWh readings
 data = pd.DataFrame({'date': dates, 'kwh': values})
 data.set_index('date', inplace=True)
+data = data.sort_index()
+
+# Calculate daily generation
+data['daily_kwh'] = data['kwh'].diff().fillna(0)
 
 # -----------------------
 # 1. Today's Meter Reading
@@ -39,20 +42,20 @@ meter_reading = st.number_input("Meter Reading (kWh, cumulative)", value=float(d
 
 if st.button("Save Today's Reading"):
     today = pd.to_datetime("today").normalize()
-    new_row = pd.DataFrame({'kwh':[meter_reading]}, index=[today])
+    new_row = pd.DataFrame({'kwh':[meter_reading]})
+    new_row['daily_kwh'] = meter_reading - data['kwh'].iloc[-1] if not data.empty else 0
+    new_row.index = [today]
     if today in data.index:
-        data.loc[today, 'kwh'] = meter_reading
+        data.loc[today] = new_row.loc[today]
     else:
-        data = pd.concat([data,new_row])
+        data = pd.concat([data, new_row])
     st.success("Today's meter reading saved!")
 
 # -----------------------
 # 2. Weather Info (Live API)
 # -----------------------
 st.subheader("Current Weather")
-
-# Replace with your OpenWeatherMap API key
-API_KEY = "YOUR_API_KEY"
+API_KEY = "YOUR_API_KEY"  # Replace with your OpenWeatherMap API key
 CITY = "London"
 URL = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}&units=metric"
 
@@ -79,15 +82,30 @@ except:
     st.write("Wind Speed: 3 m/s")
 
 # -----------------------
-# 3. Last 7 Days Data Table + Graph
+# 3. Last 7 Days Data Table + Info Panel + Bar Chart
 # -----------------------
-st.subheader("Last 7 Days Data")
-last7 = data.tail(7)
-st.dataframe(last7)
+st.subheader("Last 7 Days Data & Summary")
 
-# Bar chart
+last7 = data.tail(7).copy()
+last7_display = last7[['kwh','daily_kwh']].copy()
+last7_display.rename(columns={'kwh':'Meter Reading (kWh)', 'daily_kwh':'Daily Generation (kWh)'}, inplace=True)
+st.dataframe(last7_display)
+
+# Info Panel: total generation
+today_dt = pd.to_datetime("today").normalize()
+this_week = data.last('7D')
+this_month = data[data.index.month == today_dt.month]
+this_year = data[data.index.year == today_dt.year]
+
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Today", f"{data['daily_kwh'].iloc[-1]:.1f} kWh")
+col2.metric("This Week", f"{this_week['daily_kwh'].sum():.1f} kWh")
+col3.metric("This Month", f"{this_month['daily_kwh'].sum():.1f} kWh")
+col4.metric("Year to Date", f"{this_year['daily_kwh'].sum():.1f} kWh")
+
+# Bar chart for last 7 days
 fig, ax = plt.subplots(figsize=(8,4))
-ax.bar(last7.index.strftime('%d-%b'), last7['kwh'], width=0.5, color='orange')
+ax.bar(last7.index.strftime('%d-%b'), last7['daily_kwh'], width=0.5, color='orange')
 ax.set_ylabel('kWh')
 ax.set_title('Last 7 Days Solar Generation')
 plt.xticks(rotation=45)
@@ -99,23 +117,25 @@ st.pyplot(fig)
 st.subheader("Monthly Comparison (Rolling Average)")
 current_month = datetime.now().month
 current_year = datetime.now().year
+
 st.sidebar.subheader("Compare Past Years")
 years_available = [2024, 2023, 2022]
 selected_years = st.sidebar.multiselect("Include past years:", years_available)
 
+# Prepare long-format dataframe for Plotly
 line_rows = []
 for y in [current_year] + selected_years:
-    month_data = data[(data.index.year == y) & (data.index.month == current_month)].copy()
+    month_data = data[(data.index.year==y) & (data.index.month==current_month)].copy()
     if not month_data.empty:
-        month_data['rolling_kwh'] = month_data['kwh'].rolling(window=3).mean()
+        month_data['rolling_kwh'] = month_data['daily_kwh'].rolling(window=3).mean()
         for idx, row in month_data.iterrows():
-            line_rows.append({'date': idx, 'Year': y, 'kWh': row['rolling_kwh']})
+            line_rows.append({'date': idx, 'Year': y, 'KWh': row['rolling_kwh']})
 
 line_df = pd.DataFrame(line_rows)
 if not line_df.empty:
     fig1 = px.line(line_df, x='date', y='KWh', color='Year',
                    labels={'KWh':'kWh', 'date':'Date'},
-                   title=f"Rolling Average Solar Generation for Month {current_month}")
+                   title=f"Rolling Average Daily Generation - Month {current_month}")
     fig1.update_xaxes(tickformat='%d-%b')
     st.plotly_chart(fig1, use_container_width=True)
 else:
@@ -126,13 +146,12 @@ else:
 # -----------------------
 st.subheader("Monthly Total Generation (Grouped by Year)")
 monthly_totals = data.assign(year=data.index.year, month=data.index.month)
-monthly_totals = monthly_totals.groupby(['month','year'])['kwh'].sum().reset_index()
+monthly_totals = monthly_totals.groupby(['month','year'])['daily_kwh'].sum().reset_index()
 monthly_totals['month_str'] = monthly_totals['month'].apply(lambda x: calendar.month_abbr[x])
 
-# Grouped bar chart side by side, remove legend
-fig2 = px.bar(monthly_totals, x='month_str', y='kwh', color='year', barmode='group',
-              labels={'kwh':'Total kWh', 'month_str':'Month', 'year':'Year'},
-              text='kwh')
+fig2 = px.bar(monthly_totals, x='month_str', y='daily_kwh', color='year', barmode='group',
+              labels={'daily_kwh':'Total kWh', 'month_str':'Month', 'year':'Year'},
+              text='daily_kwh')
 fig2.update_layout(showlegend=False)
 st.plotly_chart(fig2, use_container_width=True)
 
@@ -150,8 +169,8 @@ def plot_calendar_heatmap(df):
         axes = [axes]
     for ax, month in zip(axes, months):
         month_data = df[df['month']==month]
-        pivot = month_data.pivot(index='dow', columns='week', values='kwh')
-        im = ax.imshow(pivot, cmap='Oranges', aspect='auto', origin='lower', vmin=0, vmax=df['kwh'].max())
+        pivot = month_data.pivot(index='dow', columns='week', values='daily_kwh')
+        im = ax.imshow(pivot, cmap='Oranges', aspect='auto', origin='lower', vmin=0, vmax=df['daily_kwh'].max())
         ax.set_yticks(range(7))
         ax.set_yticklabels(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'])
         ax.set_title(calendar.month_name[month])
