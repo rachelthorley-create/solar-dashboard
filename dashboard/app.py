@@ -21,7 +21,7 @@ if start_date > end_date:
     st.sidebar.error("Start date must be before end date")
 
 # -----------------------
-# Example dataset (replace with real data)
+# Example dataset
 # -----------------------
 dates = pd.date_range(start=start_date, end=end_date, freq='D')
 values = np.random.randint(0, 100, len(dates))  # Replace with actual kWh readings
@@ -82,19 +82,25 @@ st.sidebar.subheader("Compare Past Years")
 years_available = [2024, 2023, 2022]
 selected_years = st.sidebar.multiselect("Include past years:", years_available)
 
-# Build line chart data
-line_data = pd.DataFrame()
+# Build long-format dataframe for Plotly
+line_rows = []
 for y in [current_year] + selected_years:
-    month_data = data[(data.index.year==y) & (data.index.month==current_month)]
-    line_data[f'{y}'] = month_data['kwh'].rolling(window=3).mean()
-line_data['date'] = month_data.index
-line_data_melt = line_data.reset_index(drop=True).melt(id_vars='date', var_name='Year', value_name='kWh')
+    month_data = data[(data.index.year == y) & (data.index.month == current_month)].copy()
+    if not month_data.empty:
+        month_data['rolling_kwh'] = month_data['kwh'].rolling(window=3).mean()
+        for idx, row in month_data.iterrows():
+            line_rows.append({'date': idx, 'Year': y, 'KWh': row['rolling_kwh']})
 
-fig1 = px.line(line_data_melt, x='date', y='KWh', color='Year',
-              labels={'KWh':'kWh', 'date':'Date'},
-              title=f"Rolling Average Solar Generation for Month {current_month}")
-fig1.update_xaxes(tickformat='%d-%b')
-st.plotly_chart(fig1, use_container_width=True)
+line_df = pd.DataFrame(line_rows)
+
+if not line_df.empty:
+    fig1 = px.line(line_df, x='date', y='KWh', color='Year',
+                   labels={'KWh':'kWh', 'date':'Date'},
+                   title=f"Rolling Average Solar Generation for Month {current_month}")
+    fig1.update_xaxes(tickformat='%d-%b')
+    st.plotly_chart(fig1, use_container_width=True)
+else:
+    st.write("No data available for the selected months/years.")
 
 # -----------------------
 # Monthly Total Generation - Grouped Bar Chart
@@ -135,7 +141,7 @@ st.subheader("Weather Stats (from API)")
 col1, col2 = st.columns(2)
 
 with col1:
-    # Example static icons; replace with API values later
+    # Example static icons; replace with live API values later
     weather_icon = "☀️"
     temperature = 21
     sunlight_hours = 6
