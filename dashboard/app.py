@@ -30,7 +30,11 @@ data.set_index('date', inplace=True)
 data = data.sort_index()
 
 # Calculate daily generation
-data['daily_kwh'] = data['kwh'].diff().fillna(0)
+data = data.sort_index()  # ensure chronological order
+data['daily_kwh'] = data['kwh'].diff()
+data['daily_kwh'] = data['daily_kwh'].clip(lower=0)  # replace negatives with 0
+data['daily_kwh'].fillna(0, inplace=True)  # first day
+
 
 # -----------------------
 # 1. Today's Meter Reading
