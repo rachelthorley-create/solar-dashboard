@@ -4,8 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import calendar
-from datetime import datetime
-from PIL import Image
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Solar Dashboard", layout="wide")
 st.title("Solar Dashboard")
@@ -21,10 +20,10 @@ if start_date > end_date:
     st.sidebar.error("Start date must be before end date")
 
 # -----------------------
-# Generate example data
+# Example dataset (replace with real data)
 # -----------------------
 dates = pd.date_range(start=start_date, end=end_date, freq='D')
-values = np.random.randint(0, 100, len(dates))  # Replace with real kWh data
+values = np.random.randint(0, 100, len(dates))  # Replace with actual kWh readings
 
 data = pd.DataFrame({'date': dates, 'kwh': values})
 data.set_index('date', inplace=True)
@@ -64,65 +63,81 @@ st.pyplot(fig_heatmap)
 # -----------------------
 st.subheader("Last 7 Days Generation")
 last7 = data.tail(7)
-st.bar_chart(last7['kwh'])
+fig, ax = plt.subplots(figsize=(8,4))
+ax.bar(last7.index.strftime('%d-%b'), last7['kwh'], width=0.5, color='orange')
+ax.set_ylabel('kWh')
+ax.set_title('Last 7 Days Solar Generation')
+plt.xticks(rotation=45)
+st.pyplot(fig)
 
 # -----------------------
-# Rolling Average Line Chart
+# Monthly Comparison Line Chart
 # -----------------------
-st.subheader("Monthly Comparison with Rolling Average")
+st.subheader("Monthly Comparison (Rolling Average)")
 current_month = datetime.now().month
 current_year = datetime.now().year
 
-# Checkbox to include past years
 st.sidebar.subheader("Compare Past Years")
 years_available = [2024, 2023, 2022]
 selected_years = st.sidebar.multiselect("Include past years:", years_available)
 
+# Build line chart data
 line_data = pd.DataFrame()
-# Current month this year
-this_month_data = data[(data.index.month == current_month) & (data.index.year == current_year)]
-line_data[f'{current_year}'] = this_month_data['kwh'].rolling(window=3).mean()
-
-# Add past years if selected
-for y in selected_years:
-    past_data = data[(data.index.month == current_month) & (data.index.year == y)]
-    line_data[f'{y}'] = past_data['kwh'].rolling(window=3).mean()
+for y in [current_year] + selected_years:
+    month_data = data[(data.index.year==y) & (data.index.month==current_month)]
+    line_data[f'{y}'] = month_data['kwh'].rolling(window=3).mean()
 
 st.line_chart(line_data)
 
 # -----------------------
-# Data Input Section
+# Monthly Total Generation
 # -----------------------
-st.subheader("Today's Data")
+st.subheader("Monthly Total Generation")
+monthly_totals = data.groupby([data.index.year, data.index.month])['kwh'].sum().unstack(level=0)
+# Plot monthly totals for all years
+fig, ax = plt.subplots(figsize=(10,5))
+monthly_totals.plot(kind='bar', ax=ax, color=plt.cm.Oranges(np.linspace(0.4,1,len(monthly_totals.columns))))
+ax.set_xlabel('Month')
+ax.set_ylabel('Total kWh')
+ax.set_title('Monthly Total Generation by Year')
+ax.set_xticklabels([calendar.month_abbr[m] for m in monthly_totals.index], rotation=0)
+st.pyplot(fig)
 
-col1, col2 = st.columns([1,2])
+# -----------------------
+# Today's Meter Reading Input
+# -----------------------
+st.subheader("Today's Meter Reading")
 
-# Column 1: Weather info
+# Determine default as yesterday's reading
+yesterday = pd.to_datetime("today").normalize() - pd.Timedelta(days=1)
+default_meter = data.loc[yesterday, 'kwh'] if yesterday in data.index else 0.0
+
+meter_reading = st.number_input("Meter Reading (kWh, cumulative)", value=float(default_meter), step=0.1)
+if st.button("Save Today's Reading"):
+    today = pd.to_datetime("today").normalize()
+    new_row = pd.DataFrame({'kwh':[meter_reading]}, index=[today])
+    if today in data.index:
+        data.loc[today, 'kwh'] = meter_reading
+    else:
+        data = pd.concat([data,new_row])
+    st.success("Today's meter reading saved!")
+
+# -----------------------
+# Weather Info Panel
+# -----------------------
+st.subheader("Weather Stats (from API)")
+col1, col2 = st.columns(2)
+
 with col1:
-    st.markdown("**Weather Stats (from API)**")
-    # Example: replace these with actual API fetch later
-    weather_icon = "☀️"  # could vary by API condition
+    # Example static icons; replace with API values later
+    weather_icon = "☀️"
     temperature = 21
     sunlight_hours = 6
     wind_speed = 3
-    
+
     st.write(f"{weather_icon} Temperature: {temperature}°C")
     st.write(f"Sunlight hours: {sunlight_hours}")
     st.write(f"Wind Speed: {wind_speed} m/s")
 
-# Column 2: Meter reading input
-with col2:
-    meter_reading = st.number_input("Meter Reading (kWh, cumulative)", value=0.0, step=0.1)
-    if st.button("Save Today's Reading"):
-        today = pd.to_datetime("today").normalize()
-        new_row = pd.DataFrame({'kwh': [meter_reading]}, index=[today])
-        # Update or append today's row
-        if today in data.index:
-            data.loc[today, 'kwh'] = meter_reading
-        else:
-            data = pd.concat([data, new_row])
-        st.success("Today's meter reading saved!")
-
 st.write("Preview of dataset:")
 st.dataframe(data.tail(10))
-
