@@ -1,1 +1,1 @@
-# Placeholder file for fetch_weather.py
+# Placeholder for fetching weather data from Visual Crossing
