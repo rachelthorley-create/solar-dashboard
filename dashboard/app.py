@@ -54,7 +54,11 @@ if st.button("Save Today's Reading"):
 # -----------------------
 # 2. Weather Info (Live API)
 # -----------------------
-st.subheader("Current Weather")
+st.subheader("Today's Weather")
+today_str = pd.to_datetime("today").strftime("%A, %d %B %Y")
+st.write(f"**Date:** {today_str}")
+
+
 VC_API_KEY = "Q53AVJQ9AAU3A9YEMGJXNU5NW"
 POSTCODE = "CO5 8TA,UK"  # include country code
 URL = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{POSTCODE}/today?unitGroup=metric&key={VC_API_KEY}&include=current"
@@ -68,6 +72,7 @@ try:
     temp = current['temp']
     wind = current['windspeed']
     conditions = current['conditions']
+    sunhours = current.get('sunhours', None)  # may not always be available
 
     # Map conditions to emojis
     condition_icon_map = {
@@ -87,14 +92,15 @@ try:
         st.write(f"**Condition:** {conditions}")
         st.write(f"**Temperature:** {temp} °C")
         st.write(f"**Wind speed:** {wind} m/s")
+        if sunhours is not None:
+            st.write(f"**Sunlight hours:** {sunhours:.1f} h")
 
 except Exception as e:
-    st.write("Unable to fetch live weather data. Showing placeholder values.")
+    st.write("Unable to fetch today's weather. Showing placeholder values.")
     st.write(f"Error: {e}")
     st.write("☀️ Temperature: 21°C")
     st.write("Sunlight hours: 6")
     st.write("Wind Speed: 3 m/s")
-
 
 # -----------------------
 # 3. Last 7 Days Data Table + Info Panel + Bar Chart
