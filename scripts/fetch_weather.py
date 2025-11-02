@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timedelta
 
 # Config
-API_KEY = 'YOUR_VISUAL_CROSSING_API_KEY'  # replace with your key
+API_KEY = 'Q53AVJQ9AAU3A9YEMGJXNU5NW'  # replace with your key
 LOCATION = 'CO5 8TA, UK'
 CSV_PATH = 'data/solar_readings.csv'
 
