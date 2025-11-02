@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import calendar
 from datetime import datetime, timedelta
+import plotly.express as px
 
 st.set_page_config(page_title="Solar Dashboard", layout="wide")
 st.title("Solar Dashboard")
@@ -23,7 +24,7 @@ if start_date > end_date:
 # Example dataset (replace with real data)
 # -----------------------
 dates = pd.date_range(start=start_date, end=end_date, freq='D')
-values = np.random.randint(0, 100, len(dates))  # Replace with actual kWh readings
+values = np.random.randint(0, 100, len(dates))  # Replace with real kWh readings
 
 data = pd.DataFrame({'date': dates, 'kwh': values})
 data.set_index('date', inplace=True)
@@ -71,7 +72,7 @@ plt.xticks(rotation=45)
 st.pyplot(fig)
 
 # -----------------------
-# Monthly Comparison Line Chart
+# Monthly Comparison (Rolling Average) - Interactive
 # -----------------------
 st.subheader("Monthly Comparison (Rolling Average)")
 current_month = datetime.now().month
@@ -81,34 +82,38 @@ st.sidebar.subheader("Compare Past Years")
 years_available = [2024, 2023, 2022]
 selected_years = st.sidebar.multiselect("Include past years:", years_available)
 
-# Build line chart data
+# Prepare dataframe for Plotly
 line_data = pd.DataFrame()
 for y in [current_year] + selected_years:
     month_data = data[(data.index.year==y) & (data.index.month==current_month)]
     line_data[f'{y}'] = month_data['kwh'].rolling(window=3).mean()
+line_data['date'] = month_data.index  # same index for x-axis
+line_data_melt = line_data.reset_index(drop=True).melt(id_vars='date', var_name='Year', value_name='kWh')
 
-st.line_chart(line_data)
+fig = px.line(line_data_melt, x='date', y='kWh', color='Year',
+              labels={'KWh':'kWh', 'date':'Date'},
+              title=f"Rolling Average Solar Generation for Month {current_month}")
+fig.update_xaxes(tickformat='%d-%b')
+st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------
-# Monthly Total Generation
+# Monthly Total Generation - Grouped Bar Chart
 # -----------------------
-st.subheader("Monthly Total Generation")
-monthly_totals = data.groupby([data.index.year, data.index.month])['kwh'].sum().unstack(level=0)
-# Plot monthly totals for all years
-fig, ax = plt.subplots(figsize=(10,5))
-monthly_totals.plot(kind='bar', ax=ax, color=plt.cm.Oranges(np.linspace(0.4,1,len(monthly_totals.columns))))
-ax.set_xlabel('Month')
-ax.set_ylabel('Total kWh')
-ax.set_title('Monthly Total Generation by Year')
-ax.set_xticklabels([calendar.month_abbr[m] for m in monthly_totals.index], rotation=0)
-st.pyplot(fig)
+st.subheader("Monthly Total Generation (Grouped by Year)")
+monthly_totals = data.groupby([data.index.year, data.index.month])['kwh'].sum().reset_index()
+monthly_totals['month_str'] = monthly_totals['date'].dt.month.apply(lambda x: calendar.month_abbr[x])
+
+fig2 = px.bar(monthly_totals, x='month', y='kwh', color='year', barmode='group',
+              labels={'kwh':'Total kWh', 'month':'Month', 'year':'Year'},
+              text='kwh')
+st.plotly_chart(fig2, use_container_width=True)
 
 # -----------------------
 # Today's Meter Reading Input
 # -----------------------
 st.subheader("Today's Meter Reading")
 
-# Determine default as yesterday's reading
+# Default to yesterday's reading
 yesterday = pd.to_datetime("today").normalize() - pd.Timedelta(days=1)
 default_meter = data.loc[yesterday, 'kwh'] if yesterday in data.index else 0.0
 
